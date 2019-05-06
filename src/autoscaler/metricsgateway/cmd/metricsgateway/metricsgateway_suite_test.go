@@ -31,7 +31,7 @@ import (
 )
 
 var (
-	conf             *config.Config
+	conf             config.Config
 	configFile       *os.File
 	mgPath           string
 	healthHttpClient *http.Client
@@ -133,7 +133,7 @@ func initDB() {
 func initConfig() {
 
 	healthport = 8000 + GinkgoParallelNode()
-	conf = &config.Config{
+	conf = config.Config{
 		Logging: helpers.LoggingConfig{
 			Level: "info",
 		},
@@ -153,8 +153,8 @@ func initConfig() {
 			BufferSize:         500,
 			KeepAliveInterval:  1 * time.Second,
 			HandshakeTimeout:   1 * time.Second,
-			MaxSetupRetryCount: 10,
-			MaxCloseRetryCount: 10,
+			MaxSetupRetryCount: 3,
+			MaxCloseRetryCount: 3,
 			RetryDelay:         1 * time.Second,
 			MetricsServerClientTLS: &models.TLSCerts{
 				KeyFile:    metricServerClientKeyPath,
@@ -175,7 +175,7 @@ func initConfig() {
 			Port: healthport,
 		},
 	}
-	configFile = writeConfig(conf)
+	configFile = writeConfig(&conf)
 
 }
 

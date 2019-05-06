@@ -21,16 +21,15 @@ var _ = Describe("Metricsgateway", func() {
 	BeforeEach(func() {
 		runner = NewMetricsGatewayRunner()
 	})
-
+	JustBeforeEach(func() {
+		runner.Start()
+	})
 	AfterEach(func() {
 		runner.KillWithFire()
 	})
 
 	Describe("Metricscollector configuration check", func() {
 		Context("with a valid config file", func() {
-			BeforeEach(func() {
-				runner.Start()
-			})
 
 			It("Starts successfully, retrives envelopes and emit envelopes", func() {
 				Consistently(runner.Session, 5*time.Second).ShouldNot(Exit())
@@ -45,7 +44,7 @@ var _ = Describe("Metricsgateway", func() {
 				Expect(err).NotTo(HaveOccurred())
 				runner.configPath = badfile.Name()
 				ioutil.WriteFile(runner.configPath, []byte("bogus"), os.ModePerm)
-				runner.Start()
+
 			})
 
 			AfterEach(func() {
@@ -61,7 +60,6 @@ var _ = Describe("Metricsgateway", func() {
 			BeforeEach(func() {
 				runner.startCheck = ""
 				runner.configPath = "bogus"
-				runner.Start()
 			})
 
 			It("fails with an error", func() {
@@ -74,8 +72,7 @@ var _ = Describe("Metricsgateway", func() {
 				runner.startCheck = ""
 				missingConfig := conf
 				missingConfig.AppManager.PolicyDB.URL = ""
-				runner.configPath = writeConfig(missingConfig).Name()
-				runner.Start()
+				runner.configPath = writeConfig(&missingConfig).Name()
 			})
 
 			AfterEach(func() {
@@ -88,11 +85,20 @@ var _ = Describe("Metricsgateway", func() {
 			})
 		})
 	})
-
-	Describe("when an interrupt is sent", func() {
+	Describe("when it fails to connect to metricsserver when starting", func() {
 		BeforeEach(func() {
-			runner.Start()
+			wrongConfig := conf
+			wrongConfig.MetricServerAddrs = []string{"wss://localhost:9999"}
+			runner.configPath = writeConfig(&wrongConfig).Name()
+			runner.startCheck = ""
+
 		})
+		It("fails to start", func() {
+			Eventually(runner.Session, time.Duration(2*conf.Emitter.MaxSetupRetryCount)*conf.Emitter.RetryDelay).Should(Exit(1))
+			Expect(runner.Session.Buffer()).To(Say("failed to start emitter"))
+		})
+	})
+	Describe("when an interrupt is sent", func() {
 
 		It("should stop", func() {
 			runner.Session.Interrupt()
@@ -100,10 +106,6 @@ var _ = Describe("Metricsgateway", func() {
 		})
 	})
 	Describe("when Health server is ready to serve RESTful API", func() {
-		BeforeEach(func() {
-			runner.Start()
-
-		})
 		Context("when a request to query health comes", func() {
 			It("returns with a 200", func() {
 				rsp, err := healthHttpClient.Get(fmt.Sprintf("http://127.0.0.1:%d/health", healthport))
